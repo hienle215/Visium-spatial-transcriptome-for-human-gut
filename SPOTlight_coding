@@ -1,0 +1,50 @@
+# SPOTlight
+
+library(SPOTlight)
+library(Seurat)
+
+# loading reference
+cortex_sc = readRDS(glue::glue("C:\\Users\\leh\\OneDrive - TUNI.fi\\Documents\\Data\\cap_3\\outs\\reference_gut\\Full_obj_log_counts_soupx_v2_DUOdata.RDS"))
+library(dplyr)
+library(SummarizedExperiment)
+library(SingleCellExperiment)
+logcounts(cortex_sc) = assay(cortex_sc, "X")
+names(assays(cortex_sc))=c("counts","logcounts")
+reference = as.Seurat(cortex_sc, "X")
+class(reference)
+reference_SCT <- Seurat::SCTransform(reference, assay = NULL) %>%
+  Seurat::RunPCA(., verbose = FALSE) %>%
+  Seurat::RunUMAP(., dims = 1:30, verbose = FALSE)
+
+# Markers of genes
+Seurat::Idents(object = seurat_sc) <- seurat_sc@meta.data$category 
+cluster_markers_all <- Seurat::FindAllMarkers(object = seurat_sc, 
+                                              assay = "SCT",
+                                              slot = "data",
+                                              verbose = TRUE, 
+                                              only.pos = TRUE)
+
+# Loading the data 
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(cowplot)
+library(harmony)
+data_A1_009E = Read10X(data.dir = "C:/Users/leh/OneDrive - TUNI.fi/Documents/Data/capture_area_A1_009E/outs/filtered_feature_bc_matrix/")
+data_A1_009E = CreateSeuratObject(counts = Idata_A1_009E, project = "PGCd_009E")
+
+# Change visium data to single cell experiment data
+data_sc = as.SingleCellExperiment(data_A1_009E)
+
+# SPOTlight
+set.seed(687)
+res1 <- SPOTlight(
+    x = cortex_sc,
+    y = data_sc,
+    groups = as.character(cortex_sc$category),
+    mgs = cluster_markers_all,
+hvg = NULL,
+    weight_id = "avg_log2FC",
+    group_id = "cluster",
+    gene_id = "gene"
+)
