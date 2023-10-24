@@ -48,3 +48,7 @@ hvg = NULL,
     group_id = "cluster",
     gene_id = "gene"
 )
+
+test = cortex_sc[, colData(cortex_sc)$Diagnosis == "Healthy adult"]
+test = cortex_sc[colData(cortex_sc)$Sample.name == "A34 (417C)",]
+test = cortex_sc[, colData(cortex_sc)$Age == "65-70" ]
