@@ -1,0 +1,139 @@
+# Comparision between PGCd with PGCp
+
+# loading the sampple data in the comparision between batch data
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(cowplot)
+library(harmony)
+
+# set working directory to your current location
+data_A1_009E <- Read10X(data.dir = "C:/Users/leh/OneDrive - TUNI.fi/Documents/Data/capture_area_A1_009E/outs/filtered_feature_bc_matrix/")
+data_A1_009E <- CreateSeuratObject(counts = data_A1_009E, project = "PGCd_009E")
+
+data_D1_004E <- Read10X(data.dir = "C:/Users/leh/OneDrive - TUNI.fi/Documents/Data/capture_area_D1_004E/outs/filtered_feature_bc_matrix/")
+data_D1_004E <- CreateSeuratObject(counts = data_D1_004E, project = "PGCd_004E")
+
+data_D1_010E <- Read10X(data.dir = "C:/Users/leh/OneDrive - TUNI.fi/Documents/Data/capture_area_D1_010E/outs/filtered_feature_bc_matrix/")
+data_D1_010E <- CreateSeuratObject(counts = data_D1_010E, project = "PGCp_010E")
+
+data_C1_013E <- Read10X(data.dir = "C:/Users/leh/OneDrive - TUNI.fi/Documents/Data/capture_area_C1_013E/outs/filtered_feature_bc_matrix/")
+data_C1_013E <- CreateSeuratObject(counts = data_C1_013E, project = "PGCp_013E")
+
+# merge objects
+data.combined <- merge(data_A1_009E, y = c(data_D1_004E, data_D1_010E,data_C1_013E), add.cell.ids = c("PGCd", "PGCd", "PGCp", "PGCp"), project = "Spatial Transcriptome")
+
+# Visualization
+data.combined <- NormalizeData(data.combined) %>% FindVariableFeatures() %>% ScaleData() %>% RunPCA(verbose = FALSE)
+data.combined <- RunUMAP(data.combined, dims = 1:30)
+DimPlot(data.combined, group.by = "orig.ident", label = T, label.size = 6, sizes.highlight = 3,  label.color = "black", pt.size = 1)
+
+# Run Harmony
+data.combined <- RunHarmony(data.combined, group.by.vars = "orig.ident")
+data.combined <- RunUMAP(data.combined, reduction = "harmony", dims = 1:30)
+data.combined <- FindNeighbors(data.combined, reduction = "harmony", dims = 1:30) %>% FindClusters()
+# "orig.ident" = original identity
+DimPlot(data.combined, group.by = "orig.ident", label = T, label.size = 6, sizes.highlight = 3,  label.color = "black", pt.size = 1)
+# "ident" = identity, which are clusters
+DimPlot(data.combined, group.by = "ident", split.by = 'orig.ident', label = T, label.size = 8, sizes.highlight = 4,  label.color = "black", pt.size = 1.5)
+
+# To visualization for the spatial data (data set needs to be loaded the image information)
+data_A1_009E = Load10X_Spatial(
+  data.dir = "C:/Users/leh/OneDrive - TUNI.fi/Documents/Data/capture_area_A1_009E/outs",
+  filename = "filtered_feature_bc_matrix.h5",
+  assay = "Spatial",
+  slice = "PGCd_009E",
+  filter.matrix = TRUE,
+  to.upper = FALSE,
+  image = NULL,
+)
+
+data_D1_004E = Load10X_Spatial(
+  data.dir = "C:/Users/leh/OneDrive - TUNI.fi/Documents/Data/capture_area_D1_004E/outs",
+  filename = "filtered_feature_bc_matrix.h5",
+  assay = "Spatial",
+  slice = "PGCd_004E",
+  filter.matrix = TRUE,
+  to.upper = FALSE,
+  image = NULL,
+)
+
+data_C1_013E = Load10X_Spatial(
+  data.dir = "C:/Users/leh/OneDrive - TUNI.fi/Documents/Data/capture_area_C1_013E/outs",
+  filename = "filtered_feature_bc_matrix.h5",
+  assay = "Spatial",
+  slice = "PGCp_013E",
+  filter.matrix = TRUE,
+  to.upper = FALSE,
+  image = NULL,
+)
+
+data_D1_010E = Load10X_Spatial(
+  data.dir = "C:/Users/leh/OneDrive - TUNI.fi/Documents/Data/capture_area_D1_010E/outs",
+  filename = "filtered_feature_bc_matrix.h5",
+  assay = "Spatial",
+  slice = "PGCp_010E",
+  filter.matrix = TRUE,
+  to.upper = FALSE,
+  image = NULL,
+)
+
+### merge data
+data_A1_009E = SCTransform(data_A1_009E, assay = "Spatial", verbose = FALSE) # E with drug
+data_D1_004E = SCTransform(data_D1_004E, assay = "Spatial", verbose = FALSE) # E with drug
+data_C1_013E = SCTransform(data_C1_013E, assay = "Spatial", verbose = FALSE) # E with placebo
+data_D1_010E = SCTransform(data_D1_010E, assay = "Spatial", verbose = FALSE) # E with placebo
+
+data_drug = merge(data_A1_009E , y = c(data_D1_004E,data_C1_013E, data_D1_010E) 
+                  , project ="Visium_Spatial_Transcriptome")
+DefaultAssay(data_drug) = "SCT"
+VariableFeatures(data_drug) <- c(VariableFeatures(data_C1_013E), VariableFeatures(data_D1_010E),VariableFeatures(data_D1_004E),VariableFeatures(data_A1_009E))
+DefaultAssay(data_drug) = "SCT"
+data_drug = RunPCA(data_drug, verbose = F) 
+data_drug = FindNeighbors(data_drug, dims = 1:30)
+data_drug = FindClusters(data_drug, verbose = FALSE)
+data_drug = RunUMAP(data_drug, dims = 1:30)
+data_drug = PrepSCTFindMarkers(data_drug, assay = "SCT", verbose = TRUE)
+SpatialDimPlot(data_drug, pt.size = 4, label = T, label.color = "black", label.size = 40, cols = c("0" = "#e3dac9", "1" = "#ff681f", "2" = "grey", "3" = "lightgreen", "4" = "orange") ) + theme(legend.position = "right", text = element_text(size = 30))
+VlnPlot(data_drug, features = "nCount_Spatial", pt.size = 0.1) + NoLegend()
+
+# To see the cluster for each samples
+data_D1_004E = SCTransform(data_D1_004E, assay = "Spatial", verbose = FALSE) # E with drug
+data_D1_004E  = RunPCA(data_D1_004E , verbose = F) 
+data_D1_004E  = FindNeighbors(data_D1_004E , dims = 1:30)
+data_D1_004E  = FindClusters(data_D1_004E , verbose = FALSE)
+data_D1_004E  = RunUMAP(data_D1_004E , dims = 1:30)
+SpatialDimPlot(data_D1_004E , cells.highlight = CellsByIdentities(object = data_D1_004E , idents = c(0,1,2,3,4,5,6)), facet.highlight = TRUE, ncol = 4, pt.size = 4)
+
+data_C1_013E = SCTransform(data_C1_013E, assay = "Spatial", verbose = FALSE) # E with placebo
+data_C1_013E  = RunPCA(data_C1_013E , verbose = F) 
+data_C1_013E  = FindNeighbors(data_C1_013E , dims = 1:30)
+data_C1_013E  = FindClusters(data_C1_013E , verbose = FALSE)
+data_C1_013E  = RunUMAP(data_C1_013E , dims = 1:30)
+SpatialDimPlot(data_C1_013E , cells.highlight = CellsByIdentities(object = data_C1_013E , idents = c(0,1,2,3,4,5,6)), facet.highlight = TRUE, ncol = 4, pt.size = 4)
+
+data_D1_010E = SCTransform(data_D1_010E, assay = "Spatial", verbose = FALSE) # E with placebo
+data_D1_010E  = RunPCA(data_D1_010E , verbose = F) 
+data_D1_010E  = FindNeighbors(data_D1_010E , dims = 1:30)
+data_D1_010E  = FindClusters(data_D1_010E , verbose = FALSE)
+data_D1_010E  = RunUMAP(data_D1_010E , dims = 1:30)
+SpatialDimPlot(data_D1_010E , cells.highlight = CellsByIdentities(object = data_D1_010E , idents = c(0,1,2,3,4,5,6)), facet.highlight = TRUE, ncol = 4, pt.size = 4)
+
+# loading library
+cortex_sc = readRDS(glue::glue("C:\\Users\\leh\\OneDrive - TUNI.fi\\Documents\\Data\\cap_3\\outs\\reference_gut\\Full_obj_log_counts_soupx_v2_DUOdata.RDS"))
+library(dplyr)
+library(SummarizedExperiment)
+library(SingleCellExperiment)
+logcounts(cortex_sc) = assay(cortex_sc, "X")
+reference = as.Seurat(cortex_sc, "X")
+reference_SCT <- Seurat::SCTransform(reference, assay = NULL) %>%
+  Seurat::RunPCA(., verbose = FALSE) %>%
+  Seurat::RunUMAP(., dims = 1:30, verbose = FALSE)
+
+# Annotating cell types
+data_visium = data_drug
+anchors <- FindTransferAnchors(reference = reference_SCT, query = data_visium, normalization.method = "SCT") # 289 anchors
+predictions.assay <- TransferData(anchorset = anchors, refdata = reference_SCT$Integrated_05, prediction.assay = TRUE,
+                                  weight.reduction = data_visium[["pca"]], dims = 1:25)
+data_visium[["predictions"]] <- predictions.assay
+SpatialFeaturePlot(data_visium, features = c("Goblet", "Enterocyte", "Paneth"), pt.size.factor = 1.6, ncol = 4, crop = TRUE, alpha = c(0.1, 2))
