@@ -137,3 +137,11 @@ predictions.assay <- TransferData(anchorset = anchors, refdata = reference_SCT$I
                                   weight.reduction = data_visium[["pca"]], dims = 1:25)
 data_visium[["predictions"]] <- predictions.assay
 SpatialFeaturePlot(data_visium, features = c("Goblet", "Enterocyte", "Paneth"), pt.size.factor = 1.6, ncol = 4, crop = TRUE, alpha = c(0.1, 2))
+
+library(ape)
+DefaultAssay(data_visium) = "SCT"
+data_visium = FindSpatiallyVariableFeatures(data_visium, assay = "SCT", slot = "scale.data", features = VariableFeatures(data_visium), selection.method = "moransi", x.cuts = 100, y.cuts = 100)
+DefaultAssay(data_visium) <- "predictions"
+data_visium$predicted.id = GetTransferPredictions(data_visium)
+Idents(data_visium) = "predicted.id"
+DimPlot(data_visium, group.by = "predicted.id", label = T, label.size = 6, pt.size = 2)
