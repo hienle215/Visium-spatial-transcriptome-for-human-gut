@@ -275,7 +275,7 @@ plot(barplot(GO_updown, showCategory = 20))
 
 dotplot(GO_updown, showCategory=30, size = 5, font.size = 12, label_format = 30, color = c("red", "blue")) + ggtitle(" GO pathways")
 #gene invovled in GO pathaways
-edox <- setReadable(GO_downup, 'org.Hs.eg.db', 'ENTREZID')
+edox <- setReadable(GO_updown, 'org.Hs.eg.db', 'ENTREZID')
 p1 <- cnetplot(edox, node_label="category", 
         cex_label_category = 1.2) 
 p2 <- cnetplot(edox, node_label="gene", 
