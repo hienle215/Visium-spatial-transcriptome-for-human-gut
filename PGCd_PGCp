@@ -137,6 +137,7 @@ predictions.assay <- TransferData(anchorset = anchors, refdata = reference_SCT$I
                                   weight.reduction = data_visium[["pca"]], dims = 1:25)
 data_visium[["predictions"]] <- predictions.assay
 SpatialFeaturePlot(data_visium, features = c("Goblet", "Enterocyte", "Paneth"), pt.size.factor = 1.6, ncol = 4, crop = TRUE, alpha = c(0.1, 2))
+SpatialFeaturePlot(data_visium, features = c("IgG plasma cell", "Stem cells", "Paneth"), pt.size.factor = 1.6, ncol = 4, crop = TRUE, alpha = c(0.1, 2), max.cutoff = 0.09)
 
 library(ape)
 DefaultAssay(data_visium) = "SCT"
@@ -145,3 +146,150 @@ DefaultAssay(data_visium) <- "predictions"
 data_visium$predicted.id = GetTransferPredictions(data_visium)
 Idents(data_visium) = "predicted.id"
 DimPlot(data_visium, group.by = "predicted.id", label = T, label.size = 6, pt.size = 2)
+
+# Dimplot includes more classifications of cell types: contractile pericyte (PLN+), enterocyte, mature venous EC, transitional stromal 3 (C3+), and unassigned cells
+# To see the markers of enterocyte cells
+ente_markers = FindMarkers(data_visium, ident.1 = "Enterocyte")
+SpatialFeaturePlot(data_visium, features = "Enterocyte", pt.size.factor = 1.6, ncol = 4, crop = TRUE, alpha = c(0.1, 1))
+
+# Markers for cluster 4,2,0 for data_drug object
+markers_cluster_024 = FindMarkers(data_drug, ident.1 = c(0,2,4))
+markers_down = markers_cluster_024[markers_cluster_024$avg_log2FC < -0.5, ] # significant down
+
+# Top down IGHA1, JCHAIN, and FLNA of cluster_024
+SpatialFeaturePlot(data_drug, features = head(rownames(markers_down),3), pt.size = 3, min.cutoff = 1) # the different of gene up and down in two groups are different 
+# It makes the story less accurate
+
+### SUGGESTIONS
+### make two independent groups for analysis and compare the different genes between each cluster. It could be better
+## PGCd GROUP
+data_PGCd = merge(data_A1_009E , y = data_D1_004E 
+                  , project ="Visium_Spatial_Transcriptome")
+VariableFeatures(data_PGCd) <- c(VariableFeatures(data_D1_004E),VariableFeatures(data_A1_009E))
+DefaultAssay(data_PGCd) = "SCT"
+data_PGCd = RunPCA(data_PGCd, verbose = F) 
+data_PGCd = FindNeighbors(data_PGCd, dims = 1:30)
+data_PGCd = FindClusters(data_PGCd, verbose = FALSE)
+data_PGCd= RunUMAP(data_PGCd, dims = 1:30)
+data_PGCd = PrepSCTFindMarkers(data_PGCd, assay = "SCT", verbose = TRUE)
+SpatialDimPlot(data_PGCd, pt.size = 4, label = T, label.color = "black", label.size = 20, cols = c("0" = "#e3dac9", "1" = "#ff681f", "2" = "grey", "3" = "lightgreen", "4" = "orange") ) + theme(legend.position = "right", text = element_text(size = 30))
+markers_PGCd = FindMarkers(data_PGCd, ident.1 = c(0,5,3))
+
+# down groups in markers_PGCd
+markers_PGCd_down = markers_PGCd[markers_PGCd$avg_log2FC < -0.5, ] # 47 genes
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(AnnotationDbi)
+GO_PGCd_down = enrichGO(gene = rownames(markers_PGCd_down), OrgDb = "org.Hs.eg.db", keyType = "SYMBOL", ont = "BP")
+fit = plot(barplot(GO_PGCd_down, showCategory = 20))
+
+# up groups in markers_PGCd
+markers_PGCd_up = markers_PGCd[markers_PGCd$avg_log2FC > 0.5, ] # significant belong to ALP1, SLC46A1, APOA4, APOC3, APOA1
+GO_PGCd_up = enrichGO(gene = rownames(markers_PGCd_up), OrgDb = "org.Hs.eg.db", keyType = "SYMBOL", ont = "BP")
+plot(barplot(GO_PGCd_up, showCategory = 20))
+
+# PGCp GROUPS
+
+data_C1_013E = SCTransform(data_C1_013E, assay = "Spatial", verbose = FALSE) # E with placebo
+data_D1_010E = SCTransform(data_D1_010E, assay = "Spatial", verbose = FALSE) # E with placebo
+
+data_PGCp = merge(data_C1_013E , y = data_D1_010E  
+                  , project ="Visium_Spatial_Transcriptome")
+VariableFeatures(data_PGCp) <- c(VariableFeatures(data_C1_013E),VariableFeatures(data_D1_010E ))
+DefaultAssay(data_PGCp) = "SCT"
+data_PGCp = RunPCA(data_PGCp, verbose = F) 
+data_PGCp = FindNeighbors(data_PGCp, dims = 1:30)
+data_PGCp = FindClusters(data_PGCp, verbose = FALSE)
+data_PGCp = RunUMAP(data_PGCp, dims = 1:30)
+data_PGCp = PrepSCTFindMarkers(data_PGCp, assay = "SCT", verbose = TRUE)
+SpatialDimPlot(data_PGCp, pt.size = 4, label = T, label.color = "black", label.size = 20, cols = c("0" = "#e3dac9", "1" = "#ff681f", "2" = "grey", "3" = "lightgreen", "4" = "orange") ) + theme(legend.position = "right", text = element_text(size = 30))
+markers_PGCp = FindMarkers(data_PGCp, ident.1 = c(1,2,3))
+
+# down groups in markers_PGCp
+markers_PGCp_down = markers_PGCp[markers_PGCp$avg_log2FC < -0.5, ] # 20 genes
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(AnnotationDbi)
+GO_PGCp_down = enrichGO(gene = rownames(markers_PGCp_down), OrgDb = "org.Hs.eg.db", keyType = "SYMBOL", ont = "BP")
+fit = plot(barplot(GO_PGCp_down, showCategory = 20))
+
+# up groups in markers_PGCp
+markers_PGCp_up = markers_PGCp[markers_PGCp$avg_log2FC > 0.2, ] # 53 significant belong to ALP1, SLC46A1, APOA4, APOC3, APOA1
+GO_PGCp_up = enrichGO(gene = rownames(markers_PGCp_up), OrgDb = "org.Hs.eg.db", keyType = "SYMBOL", ont = "BP")
+plot(barplot(GO_PGCp_up, showCategory = 20))
+
+# GO pathway enrichment based on upregulation of cell from both groups
+GO_up = enrichGO(gene = c(rownames(markers_PGCp_up), rownames(markers_PGCd_up)), OrgDb = "org.Hs.eg.db", keyType = "SYMBOL", ont = "BP")
+plot(barplot(GO_PGCp_up, showCategory = 20))
+
+dotplot(GO_up, showCategory=30) + ggtitle(" GO pathways")
+
+#gene invovled in GO pathaways
+edox <- setReadable(GO_up, 'org.Hs.eg.db', 'ENTREZID')
+p1 <- cnetplot(edox, node_label="category", 
+        cex_label_category = 1.2) 
+p2 <- cnetplot(edox, node_label="gene", 
+        cex_label_gene = 0.8) 
+p3 <- cnetplot(edox, node_label="all") 
+p4 <- cnetplot(edox, node_label="none", 
+        color_category='firebrick', 
+        color_gene='steelblue') 
+cowplot::plot_grid(p1, p2, p3, p4, ncol=2, labels=LETTERS[1:4])
+cnetplot(edox, node_label="all", 
+        color_category='red', 
+        color_gene='blue', node_label_size = 5, cex_label_gene = 2, cex_label_category =3, cex_gene = 1) 
+
+# heatmap of GO pathways
+p1 <- heatplot(edox, showCategory=5)
+p2 <- heatplot(edox, foldChange=geneList, showCategory=5)
+cowplot::plot_grid(p1, p2, ncol=1, labels=LETTERS[1:2])
+
+# GO pathway enrichment based on downregulation of cell in PGCp and upregulation of PGCd
+GO_downup = enrichGO(gene = c(rownames(markers_PGCp_down), rownames(markers_PGCd_up)), OrgDb = "org.Hs.eg.db", keyType = "SYMBOL", ont = "BP")
+plot(barplot(GO_downup, showCategory = 20))
+
+dotplot(GO_downup, showCategory=30) + ggtitle(" GO pathways")
+#gene invovled in GO pathaways
+edox <- setReadable(GO_downup, 'org.Hs.eg.db', 'ENTREZID')
+p1 <- cnetplot(edox, node_label="category", 
+        cex_label_category = 1.2) 
+p2 <- cnetplot(edox, node_label="gene", 
+        cex_label_gene = 0.8) 
+p3 <- cnetplot(edox, node_label="all") 
+p4 <- cnetplot(edox, node_label="none", 
+        color_category='firebrick', 
+        color_gene='steelblue') 
+cowplot::plot_grid(p1, p2, p3, p4, ncol=2, labels=LETTERS[1:4])
+cnetplot(edox, node_label="all", 
+        color_category='red', 
+        color_gene='blue', node_label_size = 5, cex_label_gene = 2, cex_label_category =3, cex_gene = 1) 
+
+# heatmap of GO pathways
+p1 <- heatplot(edox, showCategory=5)
+p2 <- heatplot(edox, foldChange=geneList, showCategory=5)
+cowplot::plot_grid(p1, p2, ncol=1, labels=LETTERS[1:2])
+
+# GO pathway enrichment based on upregulation of cell in PGCp and downregulation of PGCd
+GO_updown = enrichGO(gene = c(rownames(markers_PGCp_up), rownames(markers_PGCd_down)), OrgDb = "org.Hs.eg.db", keyType = "SYMBOL", ont = "BP")
+plot(barplot(GO_updown, showCategory = 20))
+
+dotplot(GO_updown, showCategory=30, size = 5, font.size = 12, label_format = 30, color = c("red", "blue")) + ggtitle(" GO pathways")
+#gene invovled in GO pathaways
+edox <- setReadable(GO_downup, 'org.Hs.eg.db', 'ENTREZID')
+p1 <- cnetplot(edox, node_label="category", 
+        cex_label_category = 1.2) 
+p2 <- cnetplot(edox, node_label="gene", 
+        cex_label_gene = 0.8) 
+p3 <- cnetplot(edox, node_label="all") 
+p4 <- cnetplot(edox, node_label="none", 
+        color_category='firebrick', 
+        color_gene='steelblue') 
+cowplot::plot_grid(p1, p2, p3, p4, ncol=2, labels=LETTERS[1:4])
+cnetplot(edox, node_label="all", 
+        color_category='red', 
+        color_gene='blue', node_label_size = 5, cex_label_gene = 2, cex_label_category =3, cex_gene = 1) 
+
+# heatmap of GO pathways
+p1 <- heatplot(edox, showCategory=5)
+p2 <- heatplot(edox, foldChange=geneList, showCategory=5)
+cowplot::plot_grid(p1, p2, ncol=1, labels=LETTERS[1:2])
