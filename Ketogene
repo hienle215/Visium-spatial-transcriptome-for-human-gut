@@ -1,0 +1,121 @@
+## for Ketogene in PGCp and GFDp
+library(Seurat)
+library(ggplot2)
+
+data_C1_013E = Load10X_Spatial(
+  data.dir = "C:/Users/leh/OneDrive - TUNI.fi/Documents/Data/capture_area_C1_013E/outs",
+  filename = "filtered_feature_bc_matrix.h5",
+  assay = "Spatial",
+  slice = "PGCp_013E",
+  filter.matrix = TRUE,
+  to.upper = FALSE,
+  image = NULL,
+)
+#7
+data_D1_010E = Load10X_Spatial(
+  data.dir = "C:/Users/leh/OneDrive - TUNI.fi/Documents/Data/capture_area_D1_010E/outs",
+  filename = "filtered_feature_bc_matrix.h5",
+  assay = "Spatial",
+  slice = "PGCp_010E",
+  filter.matrix = TRUE,
+  to.upper = FALSE,
+  image = NULL)
+
+#A1_010B_placebo
+data_A1_010B = Load10X_Spatial(
+  data.dir = "C:/Users/leh/OneDrive - TUNI.fi/Documents/Data/capture_area_A1_010B/outs",
+  filename = "filtered_feature_bc_matrix.h5",
+  assay = "Spatial",
+  slice = "GFDp_010B",
+  filter.matrix = TRUE,
+  to.upper = FALSE,
+  image = NULL
+)
+#C1_013B_placebo
+data_C1_013B = Load10X_Spatial(
+  data.dir = "C:/Users/leh/OneDrive - TUNI.fi/Documents/Data/capture_area_C1_013B/outs",
+  filename = "filtered_feature_bc_matrix.h5",
+  assay = "Spatial",
+  slice = "GFDp_013B",
+  filter.matrix = TRUE,
+  to.upper = FALSE,
+  image = NULL
+)
+
+### merge data
+data_A1_010B  = SCTransform(data_A1_010B, assay = "Spatial", verbose = FALSE) # E with drug
+data_C1_013B = SCTransform(data_C1_013B, assay = "Spatial", verbose = FALSE) # E with drug
+data_C1_013E = SCTransform(data_C1_013E, assay = "Spatial", verbose = FALSE) # E with placebo
+data_D1_010E = SCTransform(data_D1_010E, assay = "Spatial", verbose = FALSE) # E with placebo
+
+data_drug = merge(data_A1_010B , y = c(data_D1_010E, data_C1_013B,data_C1_013E) 
+                  , project ="Visium_Spatial_Transcriptome")
+DefaultAssay(data_drug) = "SCT"
+VariableFeatures(data_drug) <- c(VariableFeatures(data_C1_013E), VariableFeatures(data_D1_010E),VariableFeatures(data_C1_013B),VariableFeatures(data_A1_010B))
+DefaultAssay(data_drug) = "SCT"
+data_drug = RunPCA(data_drug, verbose = F) 
+data_drug = FindNeighbors(data_drug, dims = 1:30)
+data_drug = FindClusters(data_drug, verbose = FALSE)
+data_drug = RunUMAP(data_drug, dims = 1:30)
+data_drug = PrepSCTFindMarkers(data_drug, assay = "SCT", verbose = TRUE)
+SpatialDimPlot(data_drug, pt.size = 4, label = T, label.color = "black", label.size = 15, ncol = 2, cols = c("0" = "#e3dac9", "1" = "#ff681f", "2" = "grey", "3" = "lightgreen", "4" = "orange") ) + theme(legend.position = "right", text = element_text(size = 30))
+
+SpatialFeaturePlot(data_visium, features = "Enterocyte", pt.size.factor = 1.6, ncol = 4, crop = TRUE, alpha = c(0.1, 1))
+VlnPlot(data_drug, features = "nCount_Spatial", pt.size = 0.1) + NoLegend()
+
+# loading library
+cortex_sc = readRDS(glue::glue("C:\\Users\\leh\\OneDrive - TUNI.fi\\Documents\\Data\\cap_3\\outs\\reference_gut\\Full_obj_log_counts_soupx_v2_DUOdata.RDS"))
+library(dplyr)
+library(SummarizedExperiment)
+library(SingleCellExperiment)
+logcounts(cortex_sc) = assay(cortex_sc, "X")
+reference = as.Seurat(cortex_sc, "X")
+reference_SCT <- Seurat::SCTransform(reference, assay = NULL) %>%
+  Seurat::RunPCA(., verbose = FALSE) %>%
+  Seurat::RunUMAP(., dims = 1:30, verbose = FALSE)
+
+# Annotating cell types
+data_visium = data_drug
+anchors <- FindTransferAnchors(reference = reference_SCT, query = data_visium, normalization.method = "SCT") # 289 anchors
+predictions.assay <- TransferData(anchorset = anchors, refdata = reference_SCT$Integrated_05, prediction.assay = TRUE,
+                                  weight.reduction = data_visium[["pca"]], dims = 1:25)
+data_visium[["predictions"]] <- predictions.assay
+SpatialFeaturePlot(data_visium, features = c("Goblet", "Enterocyte", "Paneth"), pt.size.factor = 1.6, ncol = 4, crop = TRUE, alpha = c(0.1, 2))
+SpatialFeaturePlot(data_visium, features = c("IgG plasma cell", "Stem cells", "Paneth"), pt.size.factor = 1.6, ncol = 4, crop = TRUE, alpha = c(0.1, 2), max.cutoff = 0.09)
+
+# ### SUGGESTIONS
+data_C1_013E = SCTransform(data_C1_013E, assay = "Spatial", verbose = FALSE) # E with placebo
+data_D1_010E = SCTransform(data_D1_010E, assay = "Spatial", verbose = FALSE) # E with placebo
+
+data_PGCp = merge(data_C1_013E , y = data_D1_010E  
+                  , project ="Visium_Spatial_Transcriptome")
+VariableFeatures(data_PGCp) <- c(VariableFeatures(data_C1_013E),VariableFeatures(data_D1_010E ))
+DefaultAssay(data_PGCp) = "SCT"
+data_PGCp = RunPCA(data_PGCp, verbose = F) 
+data_PGCp = FindNeighbors(data_PGCp, dims = 1:30)
+data_PGCp = FindClusters(data_PGCp, verbose = FALSE)
+data_PGCp = RunUMAP(data_PGCp, dims = 1:30)
+data_PGCp = PrepSCTFindMarkers(data_PGCp, assay = "SCT", verbose = TRUE)
+DotPlot(data_PGCp, features = "HMGCS2", cols="RdBu", scale.by = "radius", dot.min = 0) + RotatedAxis()
+DoHeatmap(subset(data_PGCp, downsample = 100), features = "HMGCS2", size = 3)
+SpatialDimPlot(data_PGCp, pt.size = 4, label = T, label.color = "black", label.size = 15, ncol = 2, cols = c("0" = "#e3dac9", "1" = "#ff681f", "2" = "grey", "3" = "lightgreen", "4" = "orange") ) + theme(legend.position = "right", text = element_text(size = 30))
+
+VlnPlot(data_PGCp, features = "HMGCS2", pt.size = 0.1) + NoLegend()
+
+### Group of gluten free diet
+data_A1_010B  = SCTransform(data_A1_010B, assay = "Spatial", verbose = FALSE) # E with drug
+data_C1_013B = SCTransform(data_C1_013B, assay = "Spatial", verbose = FALSE) # E with drug
+
+data_FGCp = merge(data_A1_010B , y = data_C1_013B  
+                  , project ="Visium_Spatial_Transcriptome")
+VariableFeatures(data_FGCp) <- c(VariableFeatures(data_A1_010B),VariableFeatures(data_C1_013B ))
+DefaultAssay(data_FGCp) = "SCT"
+data_FGCp = RunPCA(data_FGCp, verbose = F) 
+data_FGCp = FindNeighbors(data_FGCp, dims = 1:30)
+data_FGCp = FindClusters(data_FGCp, verbose = FALSE)
+data_FGCp = RunUMAP(data_FGCp, dims = 1:30)
+data_FGCp = PrepSCTFindMarkers(data_FGCp, assay = "SCT", verbose = TRUE)
+DotPlot(data_FGCp, features = "HMGCS2", cols="RdBu", scale.by = "radius", dot.min = 0) + RotatedAxis()
+DoHeatmap(subset(data_FGCp, downsample = 100), features = "HMGCS2", size = 3)
+VlnPlot(data_FGCp, features = "HMGCS2", pt.size = 0.1) + NoLegend()
+SpatialDimPlot(data_FGCp, pt.size = 4, label = T, label.color = "black", label.size = 15, ncol = 2, cols = c("0" = "#e3dac9", "1" = "#ff681f", "2" = "grey", "3" = "lightgreen", "4" = "orange") ) + theme(legend.position = "right", text = element_text(size = 30))
