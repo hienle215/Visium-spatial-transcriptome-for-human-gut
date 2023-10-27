@@ -79,8 +79,26 @@ data_visium = data_drug
 anchors <- FindTransferAnchors(reference = reference_SCT, query = data_visium, normalization.method = "SCT") # 289 anchors
 predictions.assay <- TransferData(anchorset = anchors, refdata = reference_SCT$Integrated_05, prediction.assay = TRUE,
                                   weight.reduction = data_visium[["pca"]], dims = 1:25)
+
+data_test = data_drug
+predictions.assay <- TransferData(anchorset = anchors, refdata = reference_SCT$category, prediction.assay = TRUE,
+                                  weight.reduction = data_test[["pca"]], dims = 1:25)
+data_test[["predictions"]] = predictions.assay
+SpatialFeaturePlot(data_test, features = c("Epithelial"), pt.size.factor = 2.5, ncol = 2, crop = TRUE, alpha = c(0.1, 1))
+library(ape)
+DefaultAssay(data_test) = "SCT"
+data_visium = FindSpatiallyVariableFeatures(data_test, assay = "SCT", slot = "scale.data", features = VariableFeatures(data_test), selection.method = "moransi", x.cuts = 100, y.cuts = 100)
+DefaultAssay(data_test) <- "predictions"
+data_test$predicted.id = GetTransferPredictions(data_test)
+Idents(data_test) = "predicted.id"
+DimPlot(data_test, group.by = "predicted.id", label = T, label.size = 6, pt.size = 2)
+VlnPlot(data_test, features = "HMGCS2", pt.size = 0.1) + NoLegend()
+cortex_test = subset(data_test, idents = "Epithelial")
+data_ as.SingleCellExperiment(data_test)
+plotExpression(data, features = c("HMGCS2"), x = "ident", colour = "ident", theme_size = 10, show_smooth = T)
+
 data_visium[["predictions"]] <- predictions.assay
-SpatialFeaturePlot(data_visium, features = c("Goblet", "Enterocyte", "Paneth"), pt.size.factor = 1.6, ncol = 4, crop = TRUE, alpha = c(0.1, 2))
+SpatialFeaturePlot(data_visium, features = c("Goblet", "Enterocyte", "Paneth"), pt.size.factor = 2, ncol = 4, crop = TRUE, alpha = c(0.1, 2))
 SpatialFeaturePlot(data_visium, features = c("IgG plasma cell", "Stem cells", "Paneth"), pt.size.factor = 1.6, ncol = 4, crop = TRUE, alpha = c(0.1, 2), max.cutoff = 0.09)
 
 # ### SUGGESTIONS
