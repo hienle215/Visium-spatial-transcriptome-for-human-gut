@@ -37,6 +37,9 @@ DimPlot(data.combined, group.by = "orig.ident", label = T, label.size = 6, sizes
 # "ident" = identity, which are clusters
 DimPlot(data.combined, group.by = "ident", split.by = 'orig.ident', label = T, label.size = 8, sizes.highlight = 4,  label.color = "black", pt.size = 1.5)
 
+library(ggplot2)
+DimPlot(data.combined, group.by = "ident", split.by = 'orig.ident', label = T, label.size = 8, sizes.highlight = 8,  label.color = "black", pt.size = 2) + theme(legend.position = "right", text = element_text(size = 30))
+
 # To visualization for the spatial data (data set needs to be loaded the image information)
 data_A1_009E = Load10X_Spatial(
   data.dir = "C:/Users/leh/OneDrive - TUNI.fi/Documents/Data/capture_area_A1_009E/outs",
