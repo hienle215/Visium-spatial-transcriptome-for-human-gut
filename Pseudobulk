@@ -1,0 +1,225 @@
+## PSEUDO-bulk analysis for PGCp_PGCd
+
+library(Seurat)
+library(future)
+plan("multisession", workers = 10)
+
+#Loading samples as seurat objects
+
+data_A1_009E = Load10X_Spatial(
+  data.dir = "C:/Users/leh/OneDrive - TUNI.fi/Documents/Data/capture_area_A1_009E/outs",
+  filename = "filtered_feature_bc_matrix.h5",
+  assay = "Spatial",
+  slice = "PGCd_009E",
+  filter.matrix = TRUE,
+  to.upper = FALSE,
+  image = NULL
+)
+#7
+data_D1_004E = Load10X_Spatial(
+  data.dir = "C:/Users/leh/OneDrive - TUNI.fi/Documents/Data/capture_area_D1_004E/outs",
+  filename = "filtered_feature_bc_matrix.h5",
+  assay = "Spatial",
+  slice = "PGCd_004E",
+  filter.matrix = TRUE,
+  to.upper = FALSE,
+  image = NULL
+)
+
+data_C1_013E = Load10X_Spatial(
+  data.dir = "C:/Users/leh/OneDrive - TUNI.fi/Documents/Data/capture_area_C1_013E/outs",
+  filename = "filtered_feature_bc_matrix.h5",
+  assay = "Spatial",
+  slice = "PGCp_013E",
+  filter.matrix = TRUE,
+  to.upper = FALSE,
+  image = NULL
+)
+#7
+data_D1_010E = Load10X_Spatial(
+  data.dir = "C:/Users/leh/OneDrive - TUNI.fi/Documents/Data/capture_area_D1_010E/outs",
+  filename = "filtered_feature_bc_matrix.h5",
+  assay = "Spatial",
+  slice = "PGCp_010E",
+  filter.matrix = TRUE,
+  to.upper = FALSE,
+  image = NULL
+)
+#A1_010B_placebo
+data_A1_010B = Load10X_Spatial(
+  data.dir = "C:/Users/leh/OneDrive - TUNI.fi/Documents/Data/capture_area_A1_010B/outs",
+  filename = "filtered_feature_bc_matrix.h5",
+  assay = "Spatial",
+  slice = "FGCp_010B",
+  filter.matrix = TRUE,
+  to.upper = FALSE,
+  image = NULL
+)
+
+data_A1_009E = SCTransform(data_A1_009E, assay = "Spatial", verbose = FALSE) # E with drug
+data_D1_004E = SCTransform(data_D1_004E, assay = "Spatial", verbose = FALSE) # E with drug
+data_C1_013E = SCTransform(data_C1_013E, assay = "Spatial", verbose = FALSE) # E with placebo
+data_D1_010E = SCTransform(data_D1_010E, assay = "Spatial", verbose = FALSE) # E with placebo
+
+
+data_drug = merge(data_C1_013E , y = c(data_D1_010E,data_D1_004E, data_A1_009E) 
+                  , add.cell.ids = c("Ctrl", "Ctrl", "Drug", "Drug") ,project ="Visium_Spatial_Transcriptome")
+DefaultAssay(data_drug) = "SCT"
+VariableFeatures(data_drug) <- c(VariableFeatures(data_C1_013E), VariableFeatures(data_D1_010E),VariableFeatures(data_D1_004E),VariableFeatures(data_A1_009E))
+
+DefaultAssay(data_drug) = "SCT"
+data_drug = RunPCA(data_drug, verbose = F) 
+data_drug = FindNeighbors(data_drug, dims = 1:30)
+data_drug = FindClusters(data_drug, verbose = FALSE)
+data_drug = RunUMAP(data_drug, dims = 1:30)
+DimPlot(data_drug, reduction = "umap", label = T, label.size = 6, sizes.highlight = 3,  label.color = "black", pt.size = 1)
+library(ggplot2)
+SpatialFeaturePlot(data_drug, features = "nCount_Spatial", pt.size = 3) + theme(legend.position = "right")
+
+# loading library
+cortex_sc = readRDS(glue::glue("C:\\Users\\leh\\OneDrive - TUNI.fi\\Documents\\Data\\cap_3\\outs\\reference_gut\\Full_obj_log_counts_soupx_v2_DUOdata.RDS"))
+library(dplyr)
+library(SummarizedExperiment)
+library(SingleCellExperiment)
+logcounts(cortex_sc) = assay(cortex_sc, "X")
+reference = as.Seurat(cortex_sc, "X")
+reference_SCT <- Seurat::SCTransform(reference, assay = NULL) %>%
+  Seurat::RunPCA(., verbose = FALSE) %>%
+  Seurat::RunUMAP(., dims = 1:30, verbose = FALSE)
+
+## Working on single cell data
+cortex_sc
+data_sce = as.SingleCellExperiment(data_drug)
+names(assays(cortex_sc))=c("counts","logcounts")
+library(SingleR)
+pred <- SingleR(test=data_sce, ref=cortex_sc, labels=cortex_sc$category)
+
+tab <- table(Assigned=pred$pruned.labels, Cluster=colLabels(data_sce))
+
+#change single cell data and work on https://satijalab.org/seurat/articles/pbmc3k_tutorial.html
+VlnPlot(data_sce, features = c("SCT", "nCount_Spatial"), ncol = 2)
+pbmc = data_sce
+pbmc <- subset(pbmc, subset = SCT > 200 & nCount_Spatial < 2500 ) # more focused on the cell and gene expression
+pbmc <- NormalizeData(pbmc, normalization.method = "LogNormalize", scale.factor = 10000)
+pbmc <- NormalizeData(pbmc)
+pbmc <- RunPCA(pbmc, features = VariableFeatures(object = pbmc))
+print(pbmc[["pca"]], dims = 1:5, nfeatures = 5)
+VizDimLoadings(pbmc, dims = 1:2, reduction = "pca")
+DimPlot(pbmc, reduction = "pca") + NoLegend()
+DimHeatmap(pbmc, dims = 1:15, cells = 500, balanced = TRUE)
+pbmc <- FindNeighbors(pbmc, dims = 1:10)
+pbmc <- FindClusters(pbmc, resolution = 0.5)
+DoHeatmap(pbmc, features = c("DEFA5", "MYC", "MUC13", "ALPI", "LYZ", "ADA")) + NoLegend()
+
+### Extract raw counts and metadata to create SingleCellExperiment object
+data_C1_013E@meta.data$sample_id = factor("p_1")
+data_D1_010E@meta.data$sample_id = factor("p_2")
+data_A1_009E@meta.data$sample_id = factor("d_1")
+data_D1_004E@meta.data$sample_id = factor("d_2")
+
+data_C1_013E@meta.data$group_id = factor("Ctrl")
+data_D1_010E@meta.data$group_id  = factor("Ctrl")
+data_A1_009E@meta.data$group_id = factor("drug")
+data_D1_004E@meta.data$group_id  = factor("drug")
+
+data_C1_013E@meta.data$patient_id = factor("Ctrl013")
+data_D1_010E@meta.data$patient_id  = factor("Ctrl010")
+data_A1_009E@meta.data$patient_id = factor("drug009")
+data_D1_004E@meta.data$patient_id  = factor("drug004")
+
+data_test = merge(data_C1_013E , y = c(data_D1_010E,data_D1_004E, data_A1_009E) 
+                  , add.cell.ids = c("Ctrl", "Ctrl", "E_d", "E_d") ,project ="Visium_Spatial_Transcriptome")
+DefaultAssay(data_test) = "SCT"
+VariableFeatures(data_test) <- c(VariableFeatures(data_C1_013E), VariableFeatures(data_D1_010E),VariableFeatures(data_D1_004E),VariableFeatures(data_A1_009E))
+counts = data_test@assays$Spatial@counts # to take the raw counts
+data_test@meta.data$labels = factor(pred$labels)
+metadata <- data_test@meta.data
+# Set up metadata as desired for aggregation and DE analysis
+metadata$cluster_id <- factor(data_drug@active.ident) # to take the cluster from data_drug
+
+metadata$sample_id = factor(c(data_C1_013E@meta.data$sample_id, data_D1_010E@meta.data$sample_id, data_A1_009E@meta.data$sample_id, data_D1_004E@meta.data$sample_id))
+metadata$group_id = factor(c(data_C1_013E@meta.data$group_id, data_D1_010E@meta.data$group_id, data_A1_009E@meta.data$group_id, data_D1_004E@meta.data$group_id))
+metadata$patient_id = factor(c(data_C1_013E@meta.data$patient_id, data_D1_010E@meta.data$patient_id, data_A1_009E@meta.data$patient_id, data_D1_004E@meta.data$patient_id))
+
+metadata$labels = factor(pred$pruned.labels) 
+
+# Create single cell experiment object
+sce <- SingleCellExperiment(assays = list(counts = counts), 
+                            colData = metadata)
+
+# Identify groups for aggregation of counts
+groups <- colData(sce)[, c("cluster_id", "sample_id")]
+
+### EXPLORING THE DATASET
+# Load libraries
+library(scater)
+library(Seurat)
+library(tidyverse)
+library(cowplot)
+library(Matrix.utils)
+library(edgeR)
+library(dplyr)
+library(magrittr)
+library(Matrix)
+library(purrr)
+library(reshape2)
+library(S4Vectors)
+library(tibble)
+library(SingleCellExperiment)
+library(pheatmap)
+library(apeglm)
+library(png)
+library(DESeq2)
+library(RColorBrewer)
+
+# Explore the raw counts for the dataset
+assays(sce)
+#Explore the raw counts for the dataset
+dim(counts(sce))
+counts(sce)[1:6, 1:6]
+## Explore the cellular metadata for the dataset
+dim(colData(sce))
+head(colData(sce))
+
+#Acquiring necessary metrics for aggregation across cells in a sample
+# Named vector of cluster names
+kids <- purrr::set_names(levels(sce$labels))
+kids
+
+# Total number of clusters
+nk <- length(kids)
+nk
+
+# Named vector of sample names
+sids <- purrr::set_names(levels(sce$sample_id))
+
+# Total number of samples 
+ns <- length(sids)
+ns
+# Generate sample level metadata
+
+## Determine the number of cells per sample
+table(sce$sample_id)
+
+## Turn named vector into a numeric vector of number of cells per sample
+n_cells <- as.numeric(table(sce$sample_id))
+
+## Determine how to reoder the samples (rows) of the metadata to match the order of sample names in sids vector
+m <- match(sids, sce$sample_id)
+
+## Create the sample level metadata by combining the reordered metadata with the number of cells corresponding to each sample.
+ei <- data.frame(colData(sce)[m, ], 
+                 n_cells, row.names = NULL)
+ei
+# perform QC if not already performed
+dim(sce)
+sce = perCellQCMetrics(sce)
+sce$is_outlier <- isOutlier(
+  metric = sce$total,
+  nmads = 2, type = "both", log = TRUE)
+
+if(!require('Matrix.utils')) {
+  install.packages('Matrix.utils')
+  library('Matrix.utils')
+  }
+
